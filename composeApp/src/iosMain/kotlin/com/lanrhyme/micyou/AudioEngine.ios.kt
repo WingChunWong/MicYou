@@ -41,12 +41,11 @@ private class PosixTcpSocket(private val fd: Int) {
 }
 
 private class PosixUdpSocket(private val fd: Int) {
-    fun sendto(data: ByteArray, addr: sockaddr_in): Int {
+    fun sendto(data: ByteArray, addrPtr: CPointer<sockaddr>, addrLen: UInt): Int {
         return data.usePinned { pinned ->
-            val addrCopy = addr
             posix_sendto(
                 fd, pinned.addressOf(0), data.size.toULong(), 0,
-                addrCopy.readValue<sockaddr>().ptr, sizeOf<sockaddr_in>().toUInt()
+                addrPtr, addrLen
             ).toInt()
         }
     }
@@ -65,13 +64,15 @@ private fun createSocket(type: Int): Int {
     return fd
 }
 
-private fun makeSockaddrIn(host: String, port: Int): sockaddr_in {
+private class SockaddrWrapper(val ptr: CPointer<sockaddr>, val len: UInt)
+
+private fun makeSockaddrWrapper(host: String, port: Int): SockaddrWrapper {
     val addr = nativeHeap.alloc<sockaddr_in>().apply {
         sin_family = AF_INET.toUShort()
         sin_port = htons(port.toUShort())
     }
     inet_pton(AF_INET, host, addr.sin_addr.ptr)
-    return addr
+    return SockaddrWrapper(addr.ptr.reinterpret(), sizeOf<sockaddr_in>().toUInt())
 }
 
 private fun htons(value: UShort): UShort {
@@ -204,9 +205,8 @@ actual class AudioEngine actual constructor() {
         // 2. TCP connect + handshake
         Logger.i("AudioEngine", "Connecting TCP to $targetIp:$port")
         val tcpFd = createSocket(SOCK_STREAM)
-        val tcpAddr = makeSockaddrIn(targetIp, port)
-        val addrPtr = tcpAddr.ptr.reinterpret<sockaddr>()
-        val connectResult = posix_connect(tcpFd, addrPtr, sizeOf<sockaddr_in>().toUInt())
+        val tcpAddr = makeSockaddrWrapper(targetIp, port)
+        val connectResult = posix_connect(tcpFd, tcpAddr.ptr, tcpAddr.len)
         if (connectResult < 0) {
             posix_close(tcpFd)
             throw RuntimeException("TCP connect failed: ${strerror(posix_errno())?.toKString()}")
@@ -230,12 +230,12 @@ actual class AudioEngine actual constructor() {
 
         // 4. Setup UDP (WiFi mode only)
         var udpSocket: PosixUdpSocket? = null
-        var udpAddr: sockaddr_in? = null
+        var udpAddr: SockaddrWrapper? = null
         if (mode == ConnectionMode.Wifi) {
             val udpPort = calculateUdpPort(port)
             Logger.i("AudioEngine", "Setting up UDP to $targetIp:$udpPort")
             val udpFd = createSocket(SOCK_DGRAM)
-            udpAddr = makeSockaddrIn(targetIp, udpPort)
+            udpAddr = makeSockaddrWrapper(targetIp, udpPort)
             udpSocket = PosixUdpSocket(udpFd)
         }
 
@@ -439,7 +439,7 @@ actual class AudioEngine actual constructor() {
             channels = 1u  // Force mono
         )
 
-        inputNode.installTapOnBus(0u, 1024u, targetFormat) { [weak audioPacketChannel] buffer, _ ->
+        inputNode.installTapOnBus(0u, 1024u, targetFormat) { buffer, _ ->
             // Called on real-time audio thread — must be fast!
             val pcmBuffer = buffer as? AVAudioPCMBuffer ?: return@installTapOnBus
             val frameLength = pcmBuffer.frameLength.toInt()
@@ -471,7 +471,7 @@ actual class AudioEngine actual constructor() {
     @OptIn(ExperimentalSerializationApi::class)
     private fun sendAudioViaUdp(
         udpSocket: PosixUdpSocket,
-        addr: sockaddr_in,
+        addr: SockaddrWrapper,
         wrapper: MessageWrapper
     ) {
         val packetBytes = proto.encodeToByteArray(MessageWrapper.serializer(), wrapper)
@@ -486,7 +486,7 @@ actual class AudioEngine actual constructor() {
             this[6] = (length shr 8).toByte()
             this[7] = length.toByte()
         }
-        udpSocket.sendto(header + packetBytes, addr)
+        udpSocket.sendto(header + packetBytes, addr.ptr, addr.len)
     }
 
     private fun sendTcpPacket(socket: PosixTcpSocket, data: ByteArray) {
@@ -540,7 +540,8 @@ actual class AudioEngine actual constructor() {
     }
 
     private fun currentTimeMillis(): Long {
-        return (platform.Foundation.NSDate().timeIntervalSince1970 * 1000).toLong()
+        val seconds = platform.Foundation.NSDate().timeIntervalSince1970
+        return (seconds * 1000.0).toLong()
     }
 
     private fun cleanup() {

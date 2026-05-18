@@ -331,7 +331,7 @@ fun ColorPreview(
         }
     }
     var hexInput by remember(color) {
-        mutableStateOf(
+        mutableStateOf<String>(
             String.format("#%06X", color.toArgb() and 0xFFFFFF)
         )
     }
