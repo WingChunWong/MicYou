@@ -7,11 +7,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.Color
-import com.materialkolor.dynamicColorScheme
-import com.materialkolor.dynamiccolor.ColorSpec
-import com.materialkolor.PaletteStyle as MaterialKolorPaletteStyle
 
 /**
  * 调色板风格 - 参考 InstallerX-Revived
@@ -39,39 +35,16 @@ enum class PaletteStyle(
 
 /**
  * 动态配色方案生成 - 强制使用 Expressive (2025)
+ *
+ * Platform-specific: Android/JVM use material-kolor for dynamic colors,
+ * iOS returns a default Material 3 color scheme.
  */
-@Stable
-fun dynamicColorScheme(
+expect fun dynamicColorScheme(
     keyColor: Color,
     isDark: Boolean,
     style: PaletteStyle = PaletteStyle.TonalSpot,
     contrastLevel: Double = 0.0
-): ColorScheme {
-    // 映射 PaletteStyle
-    val mkStyle = when (style) {
-        PaletteStyle.TonalSpot -> MaterialKolorPaletteStyle.TonalSpot
-        PaletteStyle.Neutral -> MaterialKolorPaletteStyle.Neutral
-        PaletteStyle.Vibrant -> MaterialKolorPaletteStyle.Vibrant
-        PaletteStyle.Expressive -> MaterialKolorPaletteStyle.Expressive
-        PaletteStyle.Rainbow -> MaterialKolorPaletteStyle.Rainbow
-        PaletteStyle.FruitSalad -> MaterialKolorPaletteStyle.FruitSalad
-        PaletteStyle.Monochrome -> MaterialKolorPaletteStyle.Monochrome
-        PaletteStyle.Fidelity -> MaterialKolorPaletteStyle.Fidelity
-        PaletteStyle.Content -> MaterialKolorPaletteStyle.Content
-    }
-
-    // 强制使用 SPEC_2025 (Expressive 2025)
-    val specVersion = if (style.supportsSpec2025) ColorSpec.SpecVersion.SPEC_2025 else ColorSpec.SpecVersion.SPEC_2021
-
-    // 直接使用 materialkolor 生成配色方案 - 不做任何手动调整
-    return dynamicColorScheme(
-        seedColor = keyColor,
-        isDark = isDark,
-        style = mkStyle,
-        contrastLevel = contrastLevel,
-        specVersion = specVersion
-    )
-}
+): ColorScheme
 
 /**
  * 颜色动画扩展 - 参考 InstallerX-Revived

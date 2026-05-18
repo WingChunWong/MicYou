@@ -36,6 +36,10 @@ configurations.configureEach {
     resolutionStrategy.eachDependency {
         if (requested.group == "org.jetbrains.compose" || requested.group.startsWith("org.jetbrains.compose.")) {
             val name = requested.name
+            // Skip version overrides for iOS/native klib variants — the Compose plugin
+            // manages those automatically using the Compose Multiplatform version.
+            if (name.contains("-uikit")) return@eachDependency
+            
             if (name == "material-icons-extended" || name == "material-icons-extended-desktop" || 
                 name == "material-icons-core" || name == "material-icons-core-desktop" ||
                 name == "material") {
@@ -64,11 +68,24 @@ kotlin {
         }
     }
     
+    iosArm64()
+    iosSimulatorArm64()
+    
+    listOf(iosArm64(), iosSimulatorArm64()).forEach { iosTarget ->
+        iosTarget.binaries.framework {
+            baseName = "ComposeApp"
+            isStatic = true
+        }
+    }
+    
     sourceSets {
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.filekit.core)
+            implementation(libs.filekit.dialogs.compose)
+            implementation(libs.materialKolor)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
@@ -87,9 +104,6 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
             implementation("dev.chrisbanes.haze:haze:1.7.2")
-            implementation(libs.filekit.core)
-            implementation(libs.filekit.dialogs.compose)
-            implementation(libs.materialKolor)
             implementation(project(":plugin-api"))
         }
         commonTest.dependencies {
@@ -112,6 +126,14 @@ kotlin {
             implementation(libs.onnxruntime)
             implementation(libs.jtransforms)
             implementation(libs.jmdns)
+            implementation(libs.filekit.core)
+            implementation(libs.filekit.dialogs.compose)
+            implementation(libs.materialKolor)
+        }
+        iosMain.dependencies {
+            implementation(libs.ktor.client.darwin)
+            implementation(libs.filekit.core)
+            implementation(libs.filekit.dialogs.compose)
         }
     }
 }

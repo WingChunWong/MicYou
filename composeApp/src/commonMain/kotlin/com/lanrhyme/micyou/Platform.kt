@@ -6,7 +6,7 @@ import androidx.compose.ui.Modifier
 import com.lanrhyme.micyou.theme.PaletteStyle
 
 enum class PlatformType {
-    Android, Desktop
+    Android, Desktop, Ios
 }
 
 interface Platform {

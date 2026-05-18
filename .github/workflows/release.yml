@@ -284,6 +284,55 @@ jobs:
         name: MicYou-Linux-NoJRE-${{ steps.version.outputs.version }}
         path: ci-artifacts/MicYou-Linux-NoJRE-${{ steps.version.outputs.version }}.tar.gz
 
+  # ----------------- iOS 构建任务 -----------------
+  build-ios:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Read Version
+      id: version
+      run: |
+        VERSION=$(grep "^project.version=" gradle.properties | cut -d'=' -f2 | tr -d '\r')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'liberica'
+        cache: gradle
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+    - name: Build iOS Framework (Arm64 Device)
+      run: ./gradlew :composeApp:linkReleaseFrameworkIosArm64
+    - name: Build iOS Framework (Arm64 Simulator)
+      run: ./gradlew :composeApp:linkReleaseFrameworkIosSimulatorArm64
+    - name: Prepare iOS Artifacts
+      run: |
+        mkdir -p ci-artifacts
+        DEVICE_FRAMEWORK="composeApp/build/bin/iosArm64/releaseFramework/ComposeApp.framework"
+        SIM_FRAMEWORK="composeApp/build/bin/iosSimulatorArm64/releaseFramework/ComposeApp.framework"
+        if [ -d "$DEVICE_FRAMEWORK" ]; then
+          cd composeApp/build/bin/iosArm64/releaseFramework
+          zip -r "../../../../ci-artifacts/MicYou-iOS-${{ steps.version.outputs.version }}-device.zip" ComposeApp.framework
+          cd - > /dev/null
+        fi
+        if [ -d "$SIM_FRAMEWORK" ]; then
+          cd composeApp/build/bin/iosSimulatorArm64/releaseFramework
+          zip -r "../../../../ci-artifacts/MicYou-iOS-${{ steps.version.outputs.version }}-simulator.zip" ComposeApp.framework
+          cd - > /dev/null
+        fi
+    - name: Upload iOS Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: MicYou-iOS-${{ steps.version.outputs.version }}
+        path: |
+          ci-artifacts/MicYou-iOS-${{ steps.version.outputs.version }}-device.zip
+          ci-artifacts/MicYou-iOS-${{ steps.version.outputs.version }}-simulator.zip
+
   # ----------------- macOS 无 JRE 打包任务 -----------------
   build-macos-no-jre:
     runs-on: ${{ matrix.runner }}
