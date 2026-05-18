@@ -131,7 +131,6 @@ kotlin {
             implementation(libs.materialKolor)
         }
         iosMain.dependencies {
-            implementation(libs.ktor.client.darwin)
             implementation(libs.filekit.core)
             implementation(libs.filekit.dialogs.compose)
         }
